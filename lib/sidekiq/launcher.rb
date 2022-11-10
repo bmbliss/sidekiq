@@ -84,8 +84,8 @@ module Sidekiq
       # doesn't actually exit, it'll reappear in the Web UI.
       redis do |conn|
         conn.pipelined do |pipeline|
-          pipeline.srem("processes", identity)
-          pipeline.unlink("#{identity}:work")
+          pipeline.srem(Sidekiq.redis_key("processes"), identity)
+          pipeline.unlink(Sidekiq.redis_key("#{identity}:work"))
         end
       end
     rescue
@@ -105,15 +105,15 @@ module Sidekiq
 
       nowdate = Time.now.utc.strftime("%Y-%m-%d")
       begin
-        Sidekiq.redis do |conn|
+        Sidekiq.redis do |conn| 
           conn.pipelined do |pipeline|
-            pipeline.incrby("stat:processed", procd)
-            pipeline.incrby("stat:processed:#{nowdate}", procd)
-            pipeline.expire("stat:processed:#{nowdate}", STATS_TTL)
+            pipeline.incrby(Sidekiq.redis_key("stat:processed"), procd)
+            pipeline.incrby(Sidekiq.redis_key("stat:processed:#{nowdate}"), procd)
+            pipeline.expire(Sidekiq.redis_key("stat:processed:#{nowdate}"), STATS_TTL)
 
-            pipeline.incrby("stat:failed", fails)
-            pipeline.incrby("stat:failed:#{nowdate}", fails)
-            pipeline.expire("stat:failed:#{nowdate}", STATS_TTL)
+            pipeline.incrby(Sidekiq.redis_key("stat:failed"), fails)
+            pipeline.incrby(Sidekiq.redis_key("stat:failed:#{nowdate}"), fails)
+            pipeline.expire(Sidekiq.redis_key("stat:failed:#{nowdate}"), STATS_TTL)
           end
         end
       rescue => ex
@@ -137,17 +137,18 @@ module Sidekiq
 
         redis do |conn|
           conn.multi do |transaction|
-            transaction.incrby("stat:processed", procd)
-            transaction.incrby("stat:processed:#{nowdate}", procd)
-            transaction.expire("stat:processed:#{nowdate}", STATS_TTL)
+            transaction.incrby(Sidekiq.redis_key("stat:processed"), procd)
+            transaction.incrby(Sidekiq.redis_key("stat:processed:#{nowdate}"), procd)
+            transaction.expire(Sidekiq.redis_key("stat:processed:#{nowdate}"), STATS_TTL)
 
-            transaction.incrby("stat:failed", fails)
-            transaction.incrby("stat:failed:#{nowdate}", fails)
-            transaction.expire("stat:failed:#{nowdate}", STATS_TTL)
+            transaction.incrby(Sidekiq.redis_key("stat:failed"), fails)
+            transaction.incrby(Sidekiq.redis_key("stat:failed:#{nowdate}"), fails)
+            transaction.expire(Sidekiq.redis_key("stat:failed:#{nowdate}"), STATS_TTL)
           end
 
           # work is the current set of executing jobs
-          work_key = "#{key}:work"
+          work_key = Sidekiq.redis_key("#{key}:work")
+          
           conn.pipelined do |transaction|
             transaction.unlink(work_key)
             curstate.each_pair do |tid, hash|
@@ -164,16 +165,16 @@ module Sidekiq
 
         _, exists, _, _, msg = redis { |conn|
           conn.multi { |transaction|
-            transaction.sadd("processes", key)
-            transaction.exists?(key)
-            transaction.hmset(key, "info", to_json,
-              "busy", curstate.size,
-              "beat", Time.now.to_f,
-              "rtt_us", rtt,
-              "quiet", @done.to_s,
-              "rss", kb)
-            transaction.expire(key, 60)
-            transaction.rpop("#{key}-signals")
+            transaction.sadd(Sidekiq.redis_key("processes"), Sidekiq.redis_key(key))
+            transaction.exists?(Sidekiq.redis_key(key))
+            transaction.hmset(Sidekiq.redis_key(key), Sidekiq.redis_key("info"), to_json,
+              Sidekiq.redis_key("busy"), curstate.size,
+              Sidekiq.redis_key("beat"), Time.now.to_f,
+              Sidekiq.redis_key("rtt_us"), rtt,
+              Sidekiq.redis_key("quiet"), @done.to_s,
+              Sidekiq.redis_key("rss"), kb)
+            transaction.expire(Sidekiq.redis_key(key), 60)
+            transaction.rpop(Sidekiq.redis_key("#{key}-signals"))
           }
         }
 

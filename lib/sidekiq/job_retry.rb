@@ -187,7 +187,7 @@ module Sidekiq
       retry_at = Time.now.to_f + delay + jitter
       payload = Sidekiq.dump_json(msg)
       redis do |conn|
-        conn.zadd("retry", retry_at.to_s, payload)
+        conn.zadd(Sidekiq.redis_key("retry"), retry_at.to_s, payload)
       end
     end
 

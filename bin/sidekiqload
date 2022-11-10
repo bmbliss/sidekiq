@@ -104,7 +104,7 @@ Monitoring = Thread.new do
   while true
     sleep 0.2
     qsize = Sidekiq.redis do |conn|
-      conn.llen "queue:default"
+      conn.llen(Sidekiq.redis_key("queue:default")) 
     end
     total = qsize
     # Sidekiq.logger.error("RSS: #{Process.rss} Pending: #{total}")

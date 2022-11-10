@@ -219,8 +219,12 @@ module Sidekiq
     end
 
     def atomic_push(conn, payloads)
+      # this code executes on the client side (your rails app). Therefore, sidekiq has not loaded and configs are not available
+      # load redis_prefix from worker options
+      redis_prefix = payloads.first["redis_prefix"]
+
       if payloads.first.key?("at")
-        conn.zadd("schedule", payloads.flat_map { |hash|
+        conn.zadd(Sidekiq.redis_key("schedule", redis_prefix: redis_prefix), payloads.flat_map { |hash|
           at = hash.delete("at").to_s
           [at, Sidekiq.dump_json(hash)]
         })
@@ -231,8 +235,9 @@ module Sidekiq
           entry["enqueued_at"] = now
           Sidekiq.dump_json(entry)
         }
-        conn.sadd("queues", queue)
-        conn.lpush("queue:#{queue}", to_push)
+
+        conn.sadd(Sidekiq.redis_key("queues", redis_prefix: redis_prefix), queue)
+        conn.lpush(Sidekiq.redis_key("queue:#{queue}", redis_prefix: redis_prefix), to_push)
       end
     end
   end

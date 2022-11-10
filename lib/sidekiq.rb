@@ -38,7 +38,8 @@ module Sidekiq
     },
     dead_max_jobs: 10_000,
     dead_timeout_in_seconds: 180 * 24 * 60 * 60, # 6 months
-    reloader: proc { |&block| block.call }
+    reloader: proc { |&block| block.call },
+    redis_prefix: nil
   }
 
   FAKE_INFO = {
@@ -328,6 +329,12 @@ module Sidekiq
 
   def self.strict_args!(mode = :raise)
     self[:on_complex_arguments] = mode
+  end
+
+  # uses the redis prefix if set, otherwise will just return the key name passed in
+  def self.redis_key(key_name, redis_prefix: nil)
+    redis_prefix ||= self[:redis_prefix]
+    redis_prefix ? "#{redis_prefix}:#{key_name}" : key_name
   end
 
   # We are shutting down Sidekiq but what about threads that

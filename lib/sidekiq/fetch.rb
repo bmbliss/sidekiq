@@ -21,7 +21,7 @@ module Sidekiq # :nodoc:
 
       def requeue
         config.redis do |conn|
-          conn.rpush(queue, job)
+          conn.rpush(Sidekiq.redis_key(queue), job)
         end
       end
     }
@@ -46,7 +46,9 @@ module Sidekiq # :nodoc:
         return nil
       end
 
-      queue, job = redis { |conn| conn.brpop(*qs) }
+      keys = qs.map { |q| Sidekiq.redis_key(q) }
+
+      queue, job = redis { |conn| conn.brpop(*keys) }
       UnitOfWork.new(queue, job, config) if queue
     end
 
@@ -63,7 +65,7 @@ module Sidekiq # :nodoc:
       redis do |conn|
         conn.pipelined do |pipeline|
           jobs_to_requeue.each do |queue, jobs|
-            pipeline.rpush(queue, jobs)
+            pipeline.rpush(Sidekiq.redis_key(queue), jobs)
           end
         end
       end

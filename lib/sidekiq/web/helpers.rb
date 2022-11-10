@@ -176,13 +176,13 @@ module Sidekiq
     end
 
     def redis_connection
-      Sidekiq.redis do |conn|
+      Sidekiq.redis do |conn| 
         conn.connection[:id]
       end
     end
 
     def namespace
-      @ns ||= Sidekiq.redis { |conn| conn.respond_to?(:namespace) ? conn.namespace : nil }
+      @ns ||= Sidekiq.redis { |conn| conn.respond_to?(:namespace) ? conn.namespace : nil } 
     end
 
     def redis_info
