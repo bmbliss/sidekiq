@@ -2,13 +2,53 @@
 
 [Sidekiq Changes](https://github.com/mperham/sidekiq/blob/main/Changes.md) | [Sidekiq Pro Changes](https://github.com/mperham/sidekiq/blob/main/Pro-Changes.md) | [Sidekiq Enterprise Changes](https://github.com/mperham/sidekiq/blob/main/Ent-Changes.md)
 
-HEAD
+6.5.8
 ----------
 
+- Fail if using a bad version of scout_apm [#5616]
+- Add pagination to Busy page [#5556]
+- Speed up WorkSet#each [#5559]
+- Adjust CurrentAttributes to work with the String class name so we aren't referencing
+the Class within a Rails initializer [#5536]
+
+6.5.7
+----------
+
+- Updates for JA and ZH locales
+- Further optimizations for scheduled polling [#5513]
+
+6.5.6
+----------
+
+- Fix deprecation warnings with redis-rb 4.8.0 [#5484]
+- Lock redis-rb to < 5.0 as we are moving to redis-client in Sidekiq 7.0
+
+6.5.5
+----------
+
+- Fix require issue with job_retry.rb [#5462]
+- Improve Sidekiq::Web compatibility with Rack 3.x
+
+6.5.4
+----------
+
+- Fix invalid code on Ruby 2.5 [#5460]
+- Fix further metrics dependency issues [#5457]
+
+6.5.3
+----------
+
+- Don't require metrics code without explicit opt-in [#5456]
+
+6.5.2
+----------
+
+- [Job Metrics are under active development, help wanted!](https://github.com/mperham/sidekiq/wiki/Metrics#contributing) **BETA**
+- Add `Context` column on queue page which shows any CurrentAttributes [#5450]
 - `sidekiq_retry_in` may now return `:discard` or `:kill` to dynamically stop job retries [#5406]
 - Smarter sorting of processes in /busy Web UI [#5398]
 - Fix broken hamburger menu in mobile UI [#5428]
-- Require redis 4.5.0. Note that Sidekiq will break if you use the
+- Require redis-rb 4.5.0. Note that Sidekiq will break if you use the
   [`Redis.exists_returns_integer = false`](https://github.com/redis/redis-rb/blob/master/CHANGELOG.md#450) flag. [#5394]
 
 6.5.1

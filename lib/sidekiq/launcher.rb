@@ -79,12 +79,14 @@ module Sidekiq
     end
 
     def clear_heartbeat
+      flush_stats
+
       # Remove record from Redis since we are shutting down.
       # Note we don't stop the heartbeat thread; if the process
       # doesn't actually exit, it'll reappear in the Web UI.
       redis do |conn|
         conn.pipelined do |pipeline|
-          pipeline.srem(Sidekiq.redis_key("processes"), identity)
+          pipeline.srem(Sidekiq.redis_key("processes"), [identity])
           pipeline.unlink(Sidekiq.redis_key("#{identity}:work"))
         end
       end
@@ -98,7 +100,7 @@ module Sidekiq
       ❤
     end
 
-    def self.flush_stats
+    def flush_stats
       fails = Processor::FAILURE.reset
       procd = Processor::PROCESSED.reset
       return if fails + procd == 0
@@ -122,7 +124,6 @@ module Sidekiq
         Sidekiq.logger.warn("Unable to flush stats: #{ex}")
       end
     end
-    at_exit(&method(:flush_stats))
 
     def ❤
       key = identity
@@ -165,7 +166,7 @@ module Sidekiq
 
         _, exists, _, _, msg = redis { |conn|
           conn.multi { |transaction|
-            transaction.sadd(Sidekiq.redis_key("processes"), Sidekiq.redis_key(key))
+            transaction.sadd(Sidekiq.redis_key("processes"), [Sidekiq.redis_key(key)])
             transaction.exists?(Sidekiq.redis_key(key))
             transaction.hmset(Sidekiq.redis_key(key), Sidekiq.redis_key("info"), to_json,
               Sidekiq.redis_key("busy"), curstate.size,
@@ -180,6 +181,7 @@ module Sidekiq
 
         # first heartbeat or recovering from an outage and need to reestablish our heartbeat
         fire_event(:heartbeat) unless exists
+        fire_event(:beat, oneshot: false)
 
         return unless msg
 

@@ -236,7 +236,7 @@ module Sidekiq
           Sidekiq.dump_json(entry)
         }
 
-        conn.sadd(Sidekiq.redis_key("queues", redis_prefix: redis_prefix), queue)
+        conn.sadd(Sidekiq.redis_key("queues", redis_prefix: redis_prefix), [queue])
         conn.lpush(Sidekiq.redis_key("queue:#{queue}", redis_prefix: redis_prefix), to_push)
       end
     end

@@ -3,7 +3,24 @@
 require "sidekiq"
 
 require "zlib"
+require "set"
 require "base64"
+
+if ENV["SIDEKIQ_METRICS_BETA"]
+  require "sidekiq/metrics/deploy"
+  require "sidekiq/metrics/query"
+end
+
+#
+# Sidekiq's Data API provides a Ruby object model on top
+# of Sidekiq's runtime data in Redis. This API should never
+# be used within application code for business logic.
+#
+# The Sidekiq server process never uses this API: all data
+# manipulation is done directly for performance reasons to
+# ensure we are using Redis as efficiently as possible at
+# every callsite.
+#
 
 module Sidekiq
   # Retrieve runtime statistics from Redis regarding
@@ -310,7 +327,7 @@ module Sidekiq
       Sidekiq.redis do |conn|
         conn.multi do |transaction|
           transaction.unlink(Sidekiq.redis_key(@rname))
-          transaction.srem(Sidekiq.redis_key("queues"), name)
+          transaction.srem(Sidekiq.redis_key("queues"), [name])
         end
       end
       true
@@ -480,7 +497,7 @@ module Sidekiq
       # #1761 in dev mode, it's possible to have jobs enqueued which haven't been loaded into
       # memory yet so the YAML can't be loaded.
       # TODO is this still necessary? Zeitwerk reloader should handle?
-      Sidekiq.logger.warn "Unable to load YAML: #{ex.message}" unless Sidekiq.config[:environment] == "development"
+      Sidekiq.logger.warn "Unable to load YAML: #{ex.message}" unless Sidekiq.options[:environment] == "development"
       default
     end
 
@@ -887,10 +904,12 @@ module Sidekiq
     # :nodoc:
     # @api private
     def cleanup
-      return 0 unless Sidekiq.redis { |conn| conn.set(Sidekiq.redis_key("process_cleanup"), "1", nx: true, ex: 60) } 
+      # dont run cleanup more than once per minute
+      return 0 unless Sidekiq.redis { |conn| conn.set(Sidekiq.redis_key("process_cleanup"), "1", nx: true, ex: 60) }
+
       count = 0
       Sidekiq.redis do |conn|
-        procs = conn.sscan_each(Sidekiq.redis_key("processes")).to_a.sort
+        procs = conn.sscan_each(Sidekiq.redis_key("processes")).to_a
         heartbeats = conn.pipelined { |pipeline|
           procs.each do |key|
             pipeline.hget(Sidekiq.redis_key(key), "info")
@@ -1091,21 +1110,28 @@ module Sidekiq
 
     def each(&block)
       results = []
+      procs = nil
+      all_works = nil
+
       Sidekiq.redis do |conn|
-        procs = conn.sscan_each(Sidekiq.redis_key("processes")).to_a
-        procs.sort.each do |key|
-          valid, workers = conn.pipelined { |pipeline|
-            pipeline.exists?(Sidekiq.redis_key(key))
+        procs = conn.sscan_each(Sidekiq.redis_key("processes")).to_a.sort
+
+        all_works = conn.pipelined do |pipeline|
+          procs.each do |key|
             pipeline.hgetall(Sidekiq.redis_key("#{key}:work"))
-          }
-          next unless valid
-          workers.each_pair do |tid, json|
-            hsh = Sidekiq.load_json(json)
-            p = hsh["payload"]
-            # avoid breaking API, this is a side effect of the JSON optimization in #4316
-            hsh["payload"] = Sidekiq.load_json(p) if p.is_a?(String)
-            results << [key, tid, hsh]
           end
+        end
+      end
+
+      procs.zip(all_works).each do |key, workers|
+        workers.each_pair do |tid, json|
+          next if json.empty?
+
+          hsh = Sidekiq.load_json(json)
+          p = hsh["payload"]
+          # avoid breaking API, this is a side effect of the JSON optimization in #4316
+          hsh["payload"] = Sidekiq.load_json(p) if p.is_a?(String)
+          results << [key, tid, hsh]
         end
       end
 
