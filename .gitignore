@@ -15,7 +15,6 @@ development.log
 /Dockerfile
 /Makefile
 /docker-compose.yml
-Gemfile.lock
 *.DS_Store
 doc/
 .yardoc/
